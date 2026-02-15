@@ -1,5 +1,7 @@
 #include "Oscillator.h"
 
+static constexpr double twoPi = 6.283185307179586476925;
+
 void Oscillator::prepare(double sampleRate)
 {
     sr = sampleRate;
@@ -25,7 +27,7 @@ float Oscillator::nextSample()
     switch (waveform)
     {
         case Waveform::Sine:
-            out = static_cast<float>(std::sin(phase * 2.0 * 3.14159265358979323846));
+            out = static_cast<float>(std::sin(phase * twoPi));
             break;
         case Waveform::Triangle:
             out = static_cast<float>(2.0 * std::abs(2.0 * phase - 1.0) - 1.0);

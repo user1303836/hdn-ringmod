@@ -60,7 +60,10 @@ void YinPitchDetector::analyse()
     for (size_t tau = 1; tau < n; ++tau)
     {
         runningSum += diff[tau];
-        cmndf[tau] = diff[tau] * static_cast<float>(tau) / runningSum;
+        if (runningSum > 0.0f)
+            cmndf[tau] = diff[tau] * static_cast<float>(tau) / runningSum;
+        else
+            cmndf[tau] = 1.0f;
     }
 
     // Step 3: Absolute threshold
