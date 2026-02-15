@@ -2,6 +2,7 @@ name: Build
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -48,7 +49,7 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.7
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Configure
         run: >
@@ -68,7 +69,7 @@ jobs:
         working-directory: build
 
       - name: Validate VST3
-        run: ./pluginval/${{ matrix.pluginval-cmd }} --validate "${{ matrix.vst3-path }}" --strictness-level 5
+        run: ./pluginval/${{ matrix.pluginval-cmd }} --validate "${{ matrix.vst3-path }}" --strictness-level 10
         working-directory: build
 
       - name: Upload VST3

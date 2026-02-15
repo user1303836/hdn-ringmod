@@ -19,19 +19,23 @@ juce_add_plugin(HdnRingmod
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
-target_sources(HdnRingmod PRIVATE
-    source/PluginProcessor.cpp
-    source/PluginEditor.cpp
+add_library(HdnRingmodShared INTERFACE)
+
+target_sources(HdnRingmodShared INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.cpp
 )
 
-target_include_directories(HdnRingmod PRIVATE source)
+target_include_directories(HdnRingmodShared INTERFACE source)
 
-target_link_libraries(HdnRingmod PRIVATE
+target_link_libraries(HdnRingmodShared INTERFACE
     juce::juce_audio_utils
     juce::juce_audio_processors
     juce::juce_dsp
     juce::juce_gui_basics
 )
+
+target_link_libraries(HdnRingmod PRIVATE HdnRingmodShared)
 
 target_compile_definitions(HdnRingmod PUBLIC
     JUCE_WEB_BROWSER=0
