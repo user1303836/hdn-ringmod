@@ -28,7 +28,7 @@ TEST_CASE("YIN: detects 440 Hz sine at 44100 Hz")
     auto result = yin.getResult();
     REQUIRE(result.frequency > 0.0f);
     REQUIRE_THAT(static_cast<double>(result.frequency),
-                 Catch::Matchers::WithinAbs(440.0, 3.0));
+                 Catch::Matchers::WithinRel(440.0, 0.01));
     REQUIRE(result.confidence > 0.5f);
 }
 
@@ -42,7 +42,7 @@ TEST_CASE("YIN: detects 220 Hz sine at 44100 Hz")
     auto result = yin.getResult();
     REQUIRE(result.frequency > 0.0f);
     REQUIRE_THAT(static_cast<double>(result.frequency),
-                 Catch::Matchers::WithinAbs(220.0, 3.0));
+                 Catch::Matchers::WithinRel(220.0, 0.01));
     REQUIRE(result.confidence > 0.5f);
 }
 

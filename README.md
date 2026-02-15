@@ -10,7 +10,7 @@ A pitch-tracking ring modulator audio plugin (VST3/AU/Standalone) built with JUC
 
 - CMake 3.25+
 - C++20 compiler
-- **macOS**: Xcode command line tools, Ninja (`brew install ninja`)
+- **macOS**: Xcode command line tools
 - **Windows**: Visual Studio 2022 (MSVC)
 
 ## Building

@@ -50,17 +50,20 @@ TEST_CASE("Oscillator: all waveforms stay in bounded range")
 
     for (auto wf : waveforms)
     {
-        Oscillator osc;
-        osc.prepare(kSampleRate);
-        osc.setWaveform(wf);
-        osc.setFrequency(1000.0f);
-
-        auto buf = generate(osc, 44100);
-
-        for (auto s : buf)
+        DYNAMIC_SECTION("waveform " << static_cast<int>(wf))
         {
-            REQUIRE(s >= -1.5f);
-            REQUIRE(s <= 1.5f);
+            Oscillator osc;
+            osc.prepare(kSampleRate);
+            osc.setWaveform(wf);
+            osc.setFrequency(1000.0f);
+
+            auto buf = generate(osc, 44100);
+
+            for (auto s : buf)
+            {
+                REQUIRE(s >= -1.01f);
+                REQUIRE(s <= 1.01f);
+            }
         }
     }
 }
@@ -92,14 +95,12 @@ TEST_CASE("Oscillator: prepare resets phase")
     osc.setFrequency(440.0f);
 
     generate(osc, 1000);
-    float before = osc.nextSample();
 
     osc.prepare(kSampleRate);
     osc.setFrequency(440.0f);
     float after = osc.nextSample();
 
     REQUIRE_THAT(after, Catch::Matchers::WithinAbs(0.0, 0.01));
-    (void)before;
 }
 
 TEST_CASE("Oscillator: square wave has correct zero crossing count")

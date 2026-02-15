@@ -15,6 +15,7 @@ add_executable(HdnRingmodTests
     TestParameters.cpp
 )
 
+# PitchSmoother is header-only so doesn't need a source entry here
 target_sources(HdnRingmodTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../source/dsp/Oscillator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../source/dsp/YinPitchDetector.cpp
