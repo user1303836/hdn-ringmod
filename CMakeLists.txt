@@ -45,3 +45,9 @@ target_compile_definitions(HdnRingmod PUBLIC
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
 )
+
+option(HDN_BUILD_TESTS "Build unit tests" OFF)
+if(HDN_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
