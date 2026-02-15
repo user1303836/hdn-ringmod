@@ -1,0 +1,78 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: macOS
+            cmake-args: -G Ninja -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+            pluginval-url: https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip
+            pluginval-cmd: pluginval.app/Contents/MacOS/pluginval
+            vst3-path: HdnRingmod_artefacts/Release/VST3/HDN Ring Modulator.vst3
+            artifact-name: HDN-Ring-Modulator-macOS-VST3
+          - os: windows-latest
+            name: Windows
+            cmake-args: ""
+            pluginval-url: https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip
+            pluginval-cmd: pluginval.exe
+            vst3-path: HdnRingmod_artefacts/Release/VST3/HDN Ring Modulator.vst3
+            artifact-name: HDN-Ring-Modulator-Windows-VST3
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.7
+
+      - name: Configure
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          ${{ matrix.cmake-args }}
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Download pluginval
+        run: |
+          curl -L -o pluginval.zip "${{ matrix.pluginval-url }}"
+          7z x pluginval.zip -opluginval || unzip pluginval.zip -d pluginval
+        working-directory: build
+
+      - name: Validate VST3
+        run: ./pluginval/${{ matrix.pluginval-cmd }} --validate "${{ matrix.vst3-path }}" --strictness-level 5
+        working-directory: build
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: build/${{ matrix.vst3-path }}

@@ -1,0 +1,29 @@
+prompt.md
+CLAUDE.md
+claude_notes.md
+implementation-plan.md
+
+# Build
+build/
+Builds/
+cmake-build-*/
+out/
+
+# IDE
+.vs/
+.vscode/
+*.xcodeproj/
+*.xcworkspace/
+*.sln
+*.vcxproj*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Compiler
+*.o
+*.obj
+*.d
+*.pch
+*.gch
