@@ -28,10 +28,11 @@ HdnRingmodAudioProcessorEditor::HdnRingmodAudioProcessorEditor(HdnRingmodAudioPr
     smoothingAttach  = std::make_unique<SliderAttachment>(p.apvts, ParameterIDs::smoothing, smoothingSlider);
     sensitivityAttach = std::make_unique<SliderAttachment>(p.apvts, ParameterIDs::sensitivity, sensitivitySlider);
 
-    auto setupCombo = [this](juce::ComboBox& box, juce::Label& label, const juce::String& text,
-                              const juce::StringArray& items)
+    auto setupCombo = [&](juce::ComboBox& box, juce::Label& label, const juce::String& text,
+                           const juce::String& paramID)
     {
-        box.addItemList(items, 1);
+        if (auto* param = dynamic_cast<juce::AudioParameterChoice*>(p.apvts.getParameter(paramID)))
+            box.addItemList(param->choices, 1);
         addAndMakeVisible(box);
 
         label.setText(text, juce::dontSendNotification);
@@ -39,8 +40,8 @@ HdnRingmodAudioProcessorEditor::HdnRingmodAudioProcessorEditor(HdnRingmodAudioPr
         addAndMakeVisible(label);
     };
 
-    setupCombo(modeBox, modeLabel, "Mode", { "Pitch Track", "Manual" });
-    setupCombo(waveformBox, waveformLabel, "Waveform", { "Sine", "Triangle", "Square", "Saw" });
+    setupCombo(modeBox, modeLabel, "Mode", ParameterIDs::mode);
+    setupCombo(waveformBox, waveformLabel, "Waveform", ParameterIDs::waveform);
 
     modeAttach     = std::make_unique<ComboBoxAttachment>(p.apvts, ParameterIDs::mode, modeBox);
     waveformAttach = std::make_unique<ComboBoxAttachment>(p.apvts, ParameterIDs::waveform, waveformBox);
@@ -57,6 +58,13 @@ HdnRingmodAudioProcessorEditor::HdnRingmodAudioProcessorEditor(HdnRingmodAudioPr
 HdnRingmodAudioProcessorEditor::~HdnRingmodAudioProcessorEditor()
 {
     stopTimer();
+    mixAttach.reset();
+    rateMultAttach.reset();
+    manualRateAttach.reset();
+    smoothingAttach.reset();
+    sensitivityAttach.reset();
+    modeAttach.reset();
+    waveformAttach.reset();
 }
 
 void HdnRingmodAudioProcessorEditor::paint(juce::Graphics& g)
@@ -72,7 +80,7 @@ void HdnRingmodAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds();
 
-    auto titleArea = area.removeFromTop(40);
+    area.removeFromTop(40);
     auto pitchArea = area.removeFromTop(30);
     pitchReadout.setBounds(pitchArea);
 
