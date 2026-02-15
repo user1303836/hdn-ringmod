@@ -110,26 +110,25 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     auto* inputData = buffer.getReadPointer(0);
 
+    float* channelPtrs[2] = {};
+    for (int ch = 0; ch < numChannels; ++ch)
+        channelPtrs[ch] = buffer.getWritePointer(ch);
+
     for (int i = 0; i < numSamples; ++i)
     {
         pitchDetector.feedSample(inputData[i]);
 
-        float oscFreq;
+        float oscFreq = 0.0f;
 
         if (mode == 0)
         {
             auto result = pitchDetector.getResult();
             float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
             oscFreq = smoothedFreq * rateMultiplier;
-
-            currentPitchHz.store(result.frequency, std::memory_order_relaxed);
-            currentConfidence.store(result.confidence, std::memory_order_relaxed);
         }
         else
         {
             oscFreq = manualRate;
-            currentPitchHz.store(0.0f, std::memory_order_relaxed);
-            currentConfidence.store(0.0f, std::memory_order_relaxed);
         }
 
         if (oscFreq > 0.0f)
@@ -139,11 +138,22 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
         for (int ch = 0; ch < numChannels; ++ch)
         {
-            auto* channelData = buffer.getWritePointer(ch);
-            float dry = channelData[i];
+            float dry = channelPtrs[ch][i];
             float wet = dry * oscSample;
-            channelData[i] = dry * (1.0f - mix) + wet * mix;
+            channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
         }
+    }
+
+    if (mode == 0)
+    {
+        auto result = pitchDetector.getResult();
+        currentPitchHz.store(result.frequency, std::memory_order_relaxed);
+        currentConfidence.store(result.confidence, std::memory_order_relaxed);
+    }
+    else
+    {
+        currentPitchHz.store(0.0f, std::memory_order_relaxed);
+        currentConfidence.store(0.0f, std::memory_order_relaxed);
     }
 }
 
