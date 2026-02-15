@@ -24,6 +24,8 @@ add_library(HdnRingmodShared INTERFACE)
 target_sources(HdnRingmodShared INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/source/PluginProcessor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/source/PluginEditor.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp/YinPitchDetector.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/source/dsp/Oscillator.cpp
 )
 
 target_include_directories(HdnRingmodShared INTERFACE source)
