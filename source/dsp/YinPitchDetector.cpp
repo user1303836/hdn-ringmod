@@ -1,4 +1,5 @@
 #include "YinPitchDetector.h"
+#include <algorithm>
 #include <cmath>
 
 void YinPitchDetector::prepare(double sampleRate)
