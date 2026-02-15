@@ -49,6 +49,7 @@ private:
     YinPitchDetector pitchDetector;
     Oscillator oscillator;
     PitchSmoother pitchSmoother;
+    bool hasValidPitch = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HdnRingmodAudioProcessor)
 };

@@ -68,6 +68,8 @@ void HdnRingmodAudioProcessor::prepareToPlay(double sampleRate, int)
 {
     pitchDetector.prepare(sampleRate);
     oscillator.prepare(sampleRate);
+    pitchSmoother.prepare(sampleRate);
+    hasValidPitch = false;
 }
 
 void HdnRingmodAudioProcessor::releaseResources()
@@ -108,39 +110,49 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     pitchSmoother.setSensitivity(sensitivity);
     oscillator.setWaveform(static_cast<Oscillator::Waveform>(waveformIdx));
 
-    auto* inputData = buffer.getReadPointer(0);
-
+    const float* channelReadPtrs[2] = {};
     float* channelPtrs[2] = {};
     for (int ch = 0; ch < numChannels; ++ch)
+    {
+        channelReadPtrs[ch] = buffer.getReadPointer(ch);
         channelPtrs[ch] = buffer.getWritePointer(ch);
+    }
 
     for (int i = 0; i < numSamples; ++i)
     {
-        pitchDetector.feedSample(inputData[i]);
-
-        float oscFreq = 0.0f;
-
         if (mode == 0)
         {
+            float monoSample = channelReadPtrs[0][i];
+            if (numChannels > 1)
+                monoSample = (monoSample + channelReadPtrs[1][i]) * 0.5f;
+
+            pitchDetector.feedSample(monoSample);
+
             auto result = pitchDetector.getResult();
             float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
-            oscFreq = smoothedFreq * rateMultiplier;
+            float oscFreq = smoothedFreq * rateMultiplier;
+
+            if (oscFreq > 0.0f)
+            {
+                oscillator.setFrequency(oscFreq);
+                hasValidPitch = true;
+            }
         }
         else
         {
-            oscFreq = manualRate;
+            oscillator.setFrequency(manualRate);
         }
-
-        if (oscFreq > 0.0f)
-            oscillator.setFrequency(oscFreq);
 
         float oscSample = oscillator.nextSample();
 
         for (int ch = 0; ch < numChannels; ++ch)
         {
             float dry = channelPtrs[ch][i];
-            float wet = dry * oscSample;
-            channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
+            if (mode == 1 || hasValidPitch)
+            {
+                float wet = dry * oscSample;
+                channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
+            }
         }
     }
 
