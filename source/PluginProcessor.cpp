@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "ParameterIDs.h"
+#include <cmath>
 
 HdnRingmodAudioProcessor::HdnRingmodAudioProcessor()
     : AudioProcessor(BusesProperties()
@@ -78,8 +79,15 @@ void HdnRingmodAudioProcessor::prepareToPlay(double sampleRate, int)
     pitchSmoother.prepare(sampleRate);
 
     smoothedMix.reset(sampleRate, 0.02);
+    smoothedMix.setCurrentAndTargetValue(mixParam->load() / 100.0f);
     smoothedRateMult.reset(sampleRate, 0.02);
+    smoothedRateMult.setCurrentAndTargetValue(rateMultParam->load());
     smoothedManualRate.reset(sampleRate, 0.02);
+    smoothedManualRate.setCurrentAndTargetValue(manualRateParam->load());
+
+    float tau = 0.005f;
+    confSmoothAlpha = 1.0f - std::exp(-1.0f / (static_cast<float>(sampleRate) * tau));
+    smoothedWetGain = 0.0f;
 }
 
 void HdnRingmodAudioProcessor::releaseResources()
@@ -144,6 +152,7 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
             auto result = pitchDetector.getResult();
             wetGain = result.confidence;
+            smoothedWetGain += confSmoothAlpha * (wetGain - smoothedWetGain);
             float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
             float oscFreq = smoothedFreq * smoothedRateMult.getNextValue();
 
@@ -152,16 +161,18 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         }
         else
         {
+            smoothedWetGain = 1.0f;
             oscillator.setFrequency(smoothedManualRate.getNextValue());
         }
 
         float oscSample = oscillator.nextSample();
+        float effectiveMix = mix * smoothedWetGain;
 
         for (int ch = 0; ch < numChannels; ++ch)
         {
             float dry = channelPtrs[ch][i];
-            float wet = dry * oscSample * wetGain;
-            channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
+            float wet = dry * oscSample;
+            channelPtrs[ch][i] = dry * (1.0f - effectiveMix) + wet * effectiveMix;
 
             if (!std::isfinite(channelPtrs[ch][i]))
                 channelPtrs[ch][i] = 0.0f;

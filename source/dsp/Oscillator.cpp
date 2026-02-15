@@ -25,6 +25,8 @@ void Oscillator::setWaveform(Waveform w)
 
 double Oscillator::polyBLEP(double t, double dt)
 {
+    if (dt <= 0.0)
+        return 0.0;
     if (t < dt)
     {
         t /= dt;
@@ -64,6 +66,8 @@ float Oscillator::nextSample()
     phase += phaseIncrement;
     while (phase >= 1.0)
         phase -= 1.0;
+    while (phase < 0.0)
+        phase += 1.0;
 
     return out;
 }
