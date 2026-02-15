@@ -1,6 +1,10 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "dsp/YinPitchDetector.h"
+#include "dsp/Oscillator.h"
+#include "dsp/PitchSmoother.h"
+#include <atomic>
 
 class HdnRingmodAudioProcessor : public juce::AudioProcessor
 {
@@ -36,8 +40,15 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    std::atomic<float> currentPitchHz { 0.0f };
+    std::atomic<float> currentConfidence { 0.0f };
+
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
+    YinPitchDetector pitchDetector;
+    Oscillator oscillator;
+    PitchSmoother pitchSmoother;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HdnRingmodAudioProcessor)
 };

@@ -64,8 +64,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout HdnRingmodAudioProcessor::cr
     return layout;
 }
 
-void HdnRingmodAudioProcessor::prepareToPlay(double, int)
+void HdnRingmodAudioProcessor::prepareToPlay(double sampleRate, int)
 {
+    pitchDetector.prepare(sampleRate);
+    oscillator.prepare(sampleRate);
 }
 
 void HdnRingmodAudioProcessor::releaseResources()
@@ -84,8 +86,75 @@ bool HdnRingmodAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts
     return true;
 }
 
-void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&)
+void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
+    juce::ScopedNoDenormals noDenormals;
+
+    auto numSamples = buffer.getNumSamples();
+    auto numChannels = buffer.getNumChannels();
+
+    if (numChannels == 0 || numSamples == 0)
+        return;
+
+    float mix = apvts.getRawParameterValue(ParameterIDs::mix)->load() / 100.0f;
+    float rateMultiplier = apvts.getRawParameterValue(ParameterIDs::rateMultiplier)->load();
+    float manualRate = apvts.getRawParameterValue(ParameterIDs::manualRate)->load();
+    int mode = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::mode)->load());
+    float smoothing = apvts.getRawParameterValue(ParameterIDs::smoothing)->load() / 100.0f;
+    float sensitivity = apvts.getRawParameterValue(ParameterIDs::sensitivity)->load() / 100.0f;
+    int waveformIdx = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::waveform)->load());
+
+    pitchSmoother.setSmoothingAmount(smoothing);
+    pitchSmoother.setSensitivity(sensitivity);
+    oscillator.setWaveform(static_cast<Oscillator::Waveform>(waveformIdx));
+
+    auto* inputData = buffer.getReadPointer(0);
+
+    float* channelPtrs[2] = {};
+    for (int ch = 0; ch < numChannels; ++ch)
+        channelPtrs[ch] = buffer.getWritePointer(ch);
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        pitchDetector.feedSample(inputData[i]);
+
+        float oscFreq = 0.0f;
+
+        if (mode == 0)
+        {
+            auto result = pitchDetector.getResult();
+            float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
+            oscFreq = smoothedFreq * rateMultiplier;
+        }
+        else
+        {
+            oscFreq = manualRate;
+        }
+
+        if (oscFreq > 0.0f)
+            oscillator.setFrequency(oscFreq);
+
+        float oscSample = oscillator.nextSample();
+
+        for (int ch = 0; ch < numChannels; ++ch)
+        {
+            float dry = channelPtrs[ch][i];
+            float wet = dry * oscSample;
+            channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
+        }
+    }
+
+    if (mode == 0)
+    {
+        auto result = pitchDetector.getResult();
+        currentPitchHz.store(result.frequency, std::memory_order_relaxed);
+        currentConfidence.store(result.confidence, std::memory_order_relaxed);
+    }
+    else
+    {
+        currentPitchHz.store(0.0f, std::memory_order_relaxed);
+        currentConfidence.store(0.0f, std::memory_order_relaxed);
+    }
 }
 
 juce::AudioProcessorEditor* HdnRingmodAudioProcessor::createEditor()
