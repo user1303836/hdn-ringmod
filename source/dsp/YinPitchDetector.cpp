@@ -6,6 +6,7 @@ void YinPitchDetector::prepare(double sampleRate)
 {
     decimation = (sampleRate > 50000.0) ? 4 : 2;
     decimationCounter = 0;
+    decimationAccum = 0.0f;
     analysisSR = sampleRate / decimation;
 
     windowSize = 2048;
@@ -22,11 +23,15 @@ void YinPitchDetector::prepare(double sampleRate)
 
 void YinPitchDetector::feedSample(float sample)
 {
+    decimationAccum += sample;
     if (++decimationCounter < decimation)
         return;
+
+    float decimatedSample = decimationAccum / static_cast<float>(decimation);
+    decimationAccum = 0.0f;
     decimationCounter = 0;
 
-    buffer[static_cast<size_t>(writePos)] = sample;
+    buffer[static_cast<size_t>(writePos)] = decimatedSample;
     ++writePos;
 
     if (writePos >= windowSize)
@@ -104,6 +109,12 @@ void YinPitchDetector::analyse()
         float denom = 2.0f * (2.0f * s1 - s2 - s0);
         if (std::abs(denom) > 1e-12f)
             betterTau += (s0 - s2) / denom;
+    }
+
+    if (betterTau < 1.0f)
+    {
+        lastResult = { 0.0f, 0.0f };
+        return;
     }
 
     float freq = static_cast<float>(analysisSR) / betterTau;

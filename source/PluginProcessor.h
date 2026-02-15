@@ -49,7 +49,21 @@ private:
     YinPitchDetector pitchDetector;
     Oscillator oscillator;
     PitchSmoother pitchSmoother;
-    bool hasValidPitch = false;
+
+    juce::SmoothedValue<float> smoothedMix;
+    juce::SmoothedValue<float> smoothedRateMult;
+    juce::SmoothedValue<float> smoothedManualRate;
+
+    float smoothedWetGain = 1.0f;
+    float confSmoothAlpha = 0.01f;
+
+    std::atomic<float>* mixParam = nullptr;
+    std::atomic<float>* rateMultParam = nullptr;
+    std::atomic<float>* manualRateParam = nullptr;
+    std::atomic<float>* modeParam = nullptr;
+    std::atomic<float>* smoothingParam = nullptr;
+    std::atomic<float>* sensitivityParam = nullptr;
+    std::atomic<float>* waveformParam = nullptr;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(HdnRingmodAudioProcessor)
 };

@@ -24,6 +24,7 @@ private:
 
     int decimation = 1;
     int decimationCounter = 0;
+    float decimationAccum = 0.0f;
 
     std::vector<float> buffer;
     int writePos = 0;

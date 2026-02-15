@@ -1,16 +1,19 @@
 #include "Oscillator.h"
+#include <algorithm>
 
 static constexpr double twoPi = 6.283185307179586476925;
 
 void Oscillator::prepare(double sampleRate)
 {
-    sr = sampleRate;
+    sr = std::max(1.0, sampleRate);
     phase = 0.0;
     updateIncrement();
 }
 
 void Oscillator::setFrequency(float hz)
 {
+    if (hz == freq)
+        return;
     freq = hz;
     updateIncrement();
 }
@@ -18,6 +21,23 @@ void Oscillator::setFrequency(float hz)
 void Oscillator::setWaveform(Waveform w)
 {
     waveform = w;
+}
+
+double Oscillator::polyBLEP(double t, double dt)
+{
+    if (dt <= 0.0)
+        return 0.0;
+    if (t < dt)
+    {
+        t /= dt;
+        return t + t - t * t - 1.0;
+    }
+    if (t > 1.0 - dt)
+    {
+        t = (t - 1.0) / dt;
+        return t * t + t + t + 1.0;
+    }
+    return 0.0;
 }
 
 float Oscillator::nextSample()
@@ -34,15 +54,20 @@ float Oscillator::nextSample()
             break;
         case Waveform::Square:
             out = (phase < 0.5) ? 1.0f : -1.0f;
+            out += static_cast<float>(polyBLEP(phase, phaseIncrement));
+            out -= static_cast<float>(polyBLEP(std::fmod(phase + 0.5, 1.0), phaseIncrement));
             break;
         case Waveform::Saw:
             out = static_cast<float>(2.0 * phase - 1.0);
+            out -= static_cast<float>(polyBLEP(phase, phaseIncrement));
             break;
     }
 
     phase += phaseIncrement;
-    if (phase >= 1.0)
+    while (phase >= 1.0)
         phase -= 1.0;
+    while (phase < 0.0)
+        phase += 1.0;
 
     return out;
 }
