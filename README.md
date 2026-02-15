@@ -4,11 +4,11 @@
 
 A pitch-tracking ring modulator audio plugin (VST3/AU/Standalone) built with JUCE 8.
 
-![funny_picture](img/Screenshot%202026-02-14%20at%208.30.52%20PM.png)
+![funny_picture](img/Screenshot%202026-02-14%20at%208.30.52 PM.png)
 
 ## What Is This?
 
-A ring modulator multiplies your audio signal by an oscillator waveform, producing sum and difference frequencies that create metallic, bell-like, or alien timbres. Traditional ring modulators use a fixed carrier frequency, which means the effect sounds different depending on what note you play -- often dissonant and hard to control.
+This is just a ring modulator, with pitch tracking because there are none that are free. Traditional ring modulators use a fixed carrier frequency, which means the effect sounds different depending on what note you play -- often dissonant and hard to control.
 
 This plugin adds **pitch tracking**. It listens to your input, detects the fundamental frequency in real time using the YIN pitch detection algorithm, and locks the modulator oscillator to that pitch. The result is a ring mod effect that tracks what you're playing, producing consistent harmonic relationships regardless of the note. The Rate Multiplier parameter lets you set the ratio between the detected pitch and the oscillator -- 1x gives you octave doubling, 2x gives you a fifth above that, and fractional values produce subharmonic content.
 
@@ -60,6 +60,7 @@ cmake --build build --config Release
 ```
 
 The built plugins will be in:
+
 - `build/HdnRingmod_artefacts/Release/VST3/HDN Ring Modulator.vst3`
 - `build/HdnRingmod_artefacts/Release/AU/HDN Ring Modulator.component`
 - `build/HdnRingmod_artefacts/Release/Standalone/HDN Ring Modulator.app`
@@ -91,15 +92,15 @@ ctest --test-dir build --build-config Release --output-on-failure
 
 ## Parameters
 
-| Parameter | Range | Default | Description |
-|---|---|---|---|
-| Mix | 0 - 100% | 50% | Dry/wet blend |
-| Rate Multiplier | 0.1 - 8.0x | 1.0x | Multiplier applied to tracked pitch |
-| Manual Rate | 20 - 5000 Hz | 440 Hz | Fixed oscillator frequency (Manual mode) |
-| Mode | Pitch Track / Manual | Pitch Track | Pitch source selection |
-| Smoothing | 0 - 100% | 50% | Pitch tracking smoothing amount |
-| Sensitivity | 0 - 100% | 50% | Pitch detection confidence threshold |
-| Waveform | Sine / Triangle / Square / Saw | Sine | Ring modulator oscillator shape |
+| Parameter       | Range                          | Default     | Description                              |
+| --------------- | ------------------------------ | ----------- | ---------------------------------------- |
+| Mix             | 0 - 100%                       | 50%         | Dry/wet blend                            |
+| Rate Multiplier | 0.1 - 8.0x                     | 1.0x        | Multiplier applied to tracked pitch      |
+| Manual Rate     | 20 - 5000 Hz                   | 440 Hz      | Fixed oscillator frequency (Manual mode) |
+| Mode            | Pitch Track / Manual           | Pitch Track | Pitch source selection                   |
+| Smoothing       | 0 - 100%                       | 50%         | Pitch tracking smoothing amount          |
+| Sensitivity     | 0 - 100%                       | 50%         | Pitch detection confidence threshold     |
+| Waveform        | Sine / Triangle / Square / Saw | Sine        | Ring modulator oscillator shape          |
 
 ## How It Works
 
