@@ -57,10 +57,14 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_C_COMPILER_LAUNCHER=sccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+          -DHDN_BUILD_TESTS=ON
           ${{ matrix.cmake-args }}
 
       - name: Build
         run: cmake --build build --config Release
+
+      - name: Run Tests
+        run: ctest --test-dir build --build-config Release --output-on-failure
 
       - name: Download pluginval
         run: |
