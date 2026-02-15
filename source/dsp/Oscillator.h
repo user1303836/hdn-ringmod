@@ -20,4 +20,5 @@ private:
     Waveform waveform = Waveform::Sine;
 
     void updateIncrement();
+    static double polyBLEP(double t, double dt);
 };

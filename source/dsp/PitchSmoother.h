@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 
 class PitchSmoother
@@ -7,12 +8,16 @@ class PitchSmoother
 public:
     inline void prepare(double sampleRate)
     {
-        sr = static_cast<float>(sampleRate);
+        sr = std::max(1.0f, static_cast<float>(sampleRate));
+        hasValue = false;
+        smoothed = 0.0f;
         recomputeAlpha();
     }
 
     inline void setSmoothingAmount(float amount01)
     {
+        if (amount01 == smoothingAmount)
+            return;
         smoothingAmount = amount01;
         recomputeAlpha();
     }
@@ -24,18 +29,20 @@ public:
 
     inline float process(float detectedFreq, float confidence)
     {
-        if (confidence < sensitivityThreshold)
-            return smoothed;
+        if (detectedFreq <= 0.0f || confidence < sensitivityThreshold)
+            return hasValue ? std::exp2(smoothed) : 0.0f;
+
+        float logFreq = std::log2(detectedFreq);
 
         if (!hasValue)
         {
-            smoothed = detectedFreq;
+            smoothed = logFreq;
             hasValue = true;
-            return smoothed;
+            return std::exp2(smoothed);
         }
 
-        smoothed += alpha * (detectedFreq - smoothed);
-        return smoothed;
+        smoothed += alpha * (logFreq - smoothed);
+        return std::exp2(smoothed);
     }
 
 private:

@@ -8,6 +8,13 @@ HdnRingmodAudioProcessor::HdnRingmodAudioProcessor()
                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "Parameters", createParameterLayout())
 {
+    mixParam         = apvts.getRawParameterValue(ParameterIDs::mix);
+    rateMultParam    = apvts.getRawParameterValue(ParameterIDs::rateMultiplier);
+    manualRateParam  = apvts.getRawParameterValue(ParameterIDs::manualRate);
+    modeParam        = apvts.getRawParameterValue(ParameterIDs::mode);
+    smoothingParam   = apvts.getRawParameterValue(ParameterIDs::smoothing);
+    sensitivityParam = apvts.getRawParameterValue(ParameterIDs::sensitivity);
+    waveformParam    = apvts.getRawParameterValue(ParameterIDs::waveform);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout HdnRingmodAudioProcessor::createParameterLayout()
@@ -69,7 +76,10 @@ void HdnRingmodAudioProcessor::prepareToPlay(double sampleRate, int)
     pitchDetector.prepare(sampleRate);
     oscillator.prepare(sampleRate);
     pitchSmoother.prepare(sampleRate);
-    hasValidPitch = false;
+
+    smoothedMix.reset(sampleRate, 0.02);
+    smoothedRateMult.reset(sampleRate, 0.02);
+    smoothedManualRate.reset(sampleRate, 0.02);
 }
 
 void HdnRingmodAudioProcessor::releaseResources()
@@ -93,18 +103,19 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     juce::ScopedNoDenormals noDenormals;
 
     auto numSamples = buffer.getNumSamples();
-    auto numChannels = buffer.getNumChannels();
+    auto numChannels = juce::jmin(buffer.getNumChannels(), 2);
 
     if (numChannels == 0 || numSamples == 0)
         return;
 
-    float mix = apvts.getRawParameterValue(ParameterIDs::mix)->load() / 100.0f;
-    float rateMultiplier = apvts.getRawParameterValue(ParameterIDs::rateMultiplier)->load();
-    float manualRate = apvts.getRawParameterValue(ParameterIDs::manualRate)->load();
-    int mode = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::mode)->load());
-    float smoothing = apvts.getRawParameterValue(ParameterIDs::smoothing)->load() / 100.0f;
-    float sensitivity = apvts.getRawParameterValue(ParameterIDs::sensitivity)->load() / 100.0f;
-    int waveformIdx = static_cast<int>(apvts.getRawParameterValue(ParameterIDs::waveform)->load());
+    smoothedMix.setTargetValue(mixParam->load() / 100.0f);
+    smoothedRateMult.setTargetValue(rateMultParam->load());
+    smoothedManualRate.setTargetValue(manualRateParam->load());
+
+    int mode = static_cast<int>(modeParam->load());
+    float smoothing = smoothingParam->load() / 100.0f;
+    float sensitivity = sensitivityParam->load() / 100.0f;
+    int waveformIdx = static_cast<int>(waveformParam->load());
 
     pitchSmoother.setSmoothingAmount(smoothing);
     pitchSmoother.setSensitivity(sensitivity);
@@ -120,6 +131,9 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
 
     for (int i = 0; i < numSamples; ++i)
     {
+        float mix = smoothedMix.getNextValue();
+        float wetGain = 1.0f;
+
         if (mode == 0)
         {
             float monoSample = channelReadPtrs[0][i];
@@ -129,18 +143,16 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             pitchDetector.feedSample(monoSample);
 
             auto result = pitchDetector.getResult();
+            wetGain = result.confidence;
             float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
-            float oscFreq = smoothedFreq * rateMultiplier;
+            float oscFreq = smoothedFreq * smoothedRateMult.getNextValue();
 
             if (oscFreq > 0.0f)
-            {
                 oscillator.setFrequency(oscFreq);
-                hasValidPitch = true;
-            }
         }
         else
         {
-            oscillator.setFrequency(manualRate);
+            oscillator.setFrequency(smoothedManualRate.getNextValue());
         }
 
         float oscSample = oscillator.nextSample();
@@ -148,11 +160,11 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
         for (int ch = 0; ch < numChannels; ++ch)
         {
             float dry = channelPtrs[ch][i];
-            if (mode == 1 || hasValidPitch)
-            {
-                float wet = dry * oscSample;
-                channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
-            }
+            float wet = dry * oscSample * wetGain;
+            channelPtrs[ch][i] = dry * (1.0f - mix) + wet * mix;
+
+            if (!std::isfinite(channelPtrs[ch][i]))
+                channelPtrs[ch][i] = 0.0f;
         }
     }
 
