@@ -6,6 +6,18 @@ A pitch-tracking ring modulator audio plugin (VST3/AU/Standalone) built with JUC
 
 ![funny_picture](img/Screenshot%202026-02-14%20at%208.30.52%20PM.png)
 
+## What Is This?
+
+A ring modulator multiplies your audio signal by an oscillator waveform, producing sum and difference frequencies that create metallic, bell-like, or alien timbres. Traditional ring modulators use a fixed carrier frequency, which means the effect sounds different depending on what note you play -- often dissonant and hard to control.
+
+This plugin adds **pitch tracking**. It listens to your input, detects the fundamental frequency in real time using the YIN pitch detection algorithm, and locks the modulator oscillator to that pitch. The result is a ring mod effect that tracks what you're playing, producing consistent harmonic relationships regardless of the note. The Rate Multiplier parameter lets you set the ratio between the detected pitch and the oscillator -- 1x gives you octave doubling, 2x gives you a fifth above that, and fractional values produce subharmonic content.
+
+When pitch detection confidence is low (silence, noise, polyphonic content), the effect gracefully fades to dry signal rather than producing artifacts.
+
+The plugin also has a conventional **Manual** mode where the oscillator runs at a fixed frequency, for traditional ring mod sounds.
+
+Four oscillator waveforms are available (sine, triangle, square, saw), each producing a different harmonic character. Square and saw use PolyBLEP anti-aliasing to reduce digital artifacts.
+
 ## Requirements
 
 - CMake 3.25+
