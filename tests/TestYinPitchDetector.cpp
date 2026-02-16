@@ -18,6 +18,23 @@ static void feedSine(YinPitchDetector& yin, double sampleRate, float freq, int n
     }
 }
 
+static int feedSineUntilDetection(YinPitchDetector& yin, double sampleRate, float freq, int maxSamples)
+{
+    double phase = 0.0;
+    double inc = twoPi * static_cast<double>(freq) / sampleRate;
+
+    for (int i = 0; i < maxSamples; ++i)
+    {
+        float sample = static_cast<float>(std::sin(phase));
+        yin.feedSample(sample);
+        phase += inc;
+
+        if (yin.getResult().frequency > 0.0f)
+            return i + 1;
+    }
+    return maxSamples;
+}
+
 TEST_CASE("YIN: detects 440 Hz sine at 44100 Hz")
 {
     YinPitchDetector yin;
@@ -119,4 +136,67 @@ TEST_CASE("YIN: confidence is clamped to [0, 1]")
     auto result = yin.getResult();
     REQUIRE(result.confidence >= 0.0f);
     REQUIRE(result.confidence <= 1.0f);
+}
+
+TEST_CASE("YIN: first detection within 1024 + hopSize samples")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    int samplesNeeded = feedSineUntilDetection(yin, 44100.0, 440.0f, 44100);
+
+    REQUIRE(samplesNeeded <= 1024 + 128);
+    REQUIRE(yin.getResult().frequency > 0.0f);
+}
+
+TEST_CASE("YIN: relocks after silence-to-signal transition")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    for (int i = 0; i < 2048; ++i)
+        yin.feedSample(0.0f);
+
+    REQUIRE(yin.getResult().frequency == 0.0f);
+
+    int samplesNeeded = feedSineUntilDetection(yin, 44100.0, 440.0f, 44100);
+
+    REQUIRE(samplesNeeded <= 1024 + 128);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinRel(440.0, 0.03));
+}
+
+TEST_CASE("YIN: updates arrive at hop intervals after initial fill")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedSine(yin, 44100.0, 440.0f, 1024);
+
+    auto firstResult = yin.getResult();
+    REQUIRE(firstResult.frequency > 0.0f);
+
+    double phase = twoPi * 440.0 * 1024.0 / 44100.0;
+    double inc = twoPi * 440.0 / 44100.0;
+    int updateCount = 0;
+    float prevFreq = firstResult.frequency;
+
+    for (int i = 0; i < 512; ++i)
+    {
+        float sample = static_cast<float>(std::sin(phase));
+        yin.feedSample(sample);
+        phase += inc;
+
+        auto r = yin.getResult();
+        if (r.frequency != prevFreq)
+        {
+            ++updateCount;
+            prevFreq = r.frequency;
+        }
+    }
+
+    REQUIRE(updateCount >= 3);
 }

@@ -4,40 +4,33 @@
 
 void YinPitchDetector::prepare(double sampleRate)
 {
-    decimation = (sampleRate > 50000.0) ? 4 : 2;
-    decimationCounter = 0;
-    decimationAccum = 0.0f;
-    analysisSR = sampleRate / decimation;
+    analysisSR = sampleRate;
 
-    windowSize = 2048;
+    windowSize = 1024;
     halfWindow = windowSize / 2;
+    hopSize = 128;
 
     buffer.assign(static_cast<size_t>(windowSize), 0.0f);
+    linearBuffer.resize(static_cast<size_t>(windowSize));
     diff.resize(static_cast<size_t>(halfWindow));
     cmndf.resize(static_cast<size_t>(halfWindow));
 
     writePos = 0;
-    bufferFull = false;
+    hopCounter = 0;
+    sampleCount = 0;
     lastResult = {};
 }
 
 void YinPitchDetector::feedSample(float sample)
 {
-    decimationAccum += sample;
-    if (++decimationCounter < decimation)
-        return;
+    buffer[static_cast<size_t>(writePos)] = sample;
+    writePos = (writePos + 1) % windowSize;
+    ++sampleCount;
+    ++hopCounter;
 
-    float decimatedSample = decimationAccum / static_cast<float>(decimation);
-    decimationAccum = 0.0f;
-    decimationCounter = 0;
-
-    buffer[static_cast<size_t>(writePos)] = decimatedSample;
-    ++writePos;
-
-    if (writePos >= windowSize)
+    if (sampleCount >= windowSize && hopCounter >= hopSize)
     {
-        writePos = 0;
-        bufferFull = true;
+        hopCounter = 0;
         analyse();
     }
 }
@@ -49,24 +42,22 @@ PitchResult YinPitchDetector::getResult() const
 
 void YinPitchDetector::analyse()
 {
-    if (!bufferFull)
-        return;
-
     auto n = static_cast<size_t>(halfWindow);
 
-    // Step 1: Difference function
+    for (int i = 0; i < windowSize; ++i)
+        linearBuffer[static_cast<size_t>(i)] = buffer[static_cast<size_t>((writePos + i) % windowSize)];
+
     for (size_t tau = 0; tau < n; ++tau)
     {
         float sum = 0.0f;
         for (size_t j = 0; j < n; ++j)
         {
-            float d = buffer[j] - buffer[j + tau];
+            float d = linearBuffer[j] - linearBuffer[j + tau];
             sum += d * d;
         }
         diff[tau] = sum;
     }
 
-    // Step 2: Cumulative mean normalized difference function
     cmndf[0] = 1.0f;
     float runningSum = 0.0f;
 
@@ -79,7 +70,6 @@ void YinPitchDetector::analyse()
             cmndf[tau] = 1.0f;
     }
 
-    // Step 3: Absolute threshold
     size_t tauEstimate = 0;
     for (size_t tau = 2; tau < n; ++tau)
     {
@@ -98,7 +88,6 @@ void YinPitchDetector::analyse()
         return;
     }
 
-    // Step 4: Parabolic interpolation
     float betterTau = static_cast<float>(tauEstimate);
 
     if (tauEstimate > 0 && tauEstimate < n - 1)
