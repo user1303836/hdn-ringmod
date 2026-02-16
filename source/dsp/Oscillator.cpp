@@ -1,7 +1,20 @@
 #include "Oscillator.h"
 #include <algorithm>
+#include <array>
 
 static constexpr double twoPi = 6.283185307179586476925;
+
+static const float* getSineTable()
+{
+    static constexpr int size = 2048;
+    static const auto table = [] {
+        std::array<float, size + 1> t {};
+        for (int i = 0; i <= size; ++i)
+            t[static_cast<size_t>(i)] = static_cast<float>(std::sin(twoPi * static_cast<double>(i) / size));
+        return t;
+    }();
+    return table.data();
+}
 
 void Oscillator::prepare(double sampleRate)
 {
@@ -47,8 +60,14 @@ float Oscillator::nextSample()
     switch (waveform)
     {
         case Waveform::Sine:
-            out = static_cast<float>(std::sin(phase * twoPi));
+        {
+            const float* table = getSineTable();
+            double idx = phase * 2048.0;
+            auto i0 = static_cast<int>(idx);
+            float frac = static_cast<float>(idx - i0);
+            out = table[i0] + frac * (table[i0 + 1] - table[i0]);
             break;
+        }
         case Waveform::Triangle:
             out = static_cast<float>(2.0 * std::abs(2.0 * phase - 1.0) - 1.0);
             break;
