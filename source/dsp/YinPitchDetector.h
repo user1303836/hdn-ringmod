@@ -1,5 +1,7 @@
 #pragma once
 
+#include <juce_dsp/juce_dsp.h>
+#include <memory>
 #include <vector>
 
 struct PitchResult
@@ -28,6 +30,12 @@ private:
     int writePos = 0;
     int hopCounter = 0;
     bool windowFilled = false;
+
+    std::unique_ptr<juce::dsp::FFT> fft;
+    int fftOrder = 0;
+    int fftSize = 0;
+    std::vector<float> fftInput;
+    std::vector<float> fftOutput;
 
     std::vector<float> diff;
     std::vector<float> cmndf;

@@ -10,6 +10,12 @@ void YinPitchDetector::prepare(double sampleRate)
     windowSize = 2 * halfWindow;
     hopSize = static_cast<int>(std::ceil(sampleRate * 0.003));
 
+    fftOrder = static_cast<int>(std::ceil(std::log2(2.0 * windowSize)));
+    fftSize = 1 << fftOrder;
+    fft = std::make_unique<juce::dsp::FFT>(fftOrder);
+    fftInput.resize(static_cast<size_t>(fftSize * 2), 0.0f);
+    fftOutput.resize(static_cast<size_t>(fftSize * 2), 0.0f);
+
     buffer.assign(static_cast<size_t>(windowSize), 0.0f);
     linearBuffer.resize(static_cast<size_t>(windowSize));
     diff.resize(static_cast<size_t>(halfWindow));
@@ -54,15 +60,40 @@ void YinPitchDetector::analyse()
     for (int i = 0; i < windowSize; ++i)
         linearBuffer[static_cast<size_t>(i)] = buffer[static_cast<size_t>((writePos + i) % windowSize)];
 
-    for (size_t tau = 0; tau < n; ++tau)
+    std::fill(fftInput.begin(), fftInput.end(), 0.0f);
+    for (size_t i = 0; i < n; ++i)
+        fftInput[i] = linearBuffer[i];
+    fft->performRealOnlyForwardTransform(fftInput.data());
+
+    std::fill(fftOutput.begin(), fftOutput.end(), 0.0f);
+    for (int i = 0; i < windowSize; ++i)
+        fftOutput[static_cast<size_t>(i)] = linearBuffer[static_cast<size_t>(i)];
+    fft->performRealOnlyForwardTransform(fftOutput.data());
+
+    for (int k = 0; k < fftSize; ++k)
     {
-        float sum = 0.0f;
-        for (size_t j = 0; j < n; ++j)
-        {
-            float d = linearBuffer[j] - linearBuffer[j + tau];
-            sum += d * d;
-        }
-        diff[tau] = sum;
+        float aRe = fftInput[static_cast<size_t>(2 * k)];
+        float aIm = fftInput[static_cast<size_t>(2 * k + 1)];
+        float bRe = fftOutput[static_cast<size_t>(2 * k)];
+        float bIm = fftOutput[static_cast<size_t>(2 * k + 1)];
+        fftInput[static_cast<size_t>(2 * k)]     = aRe * bRe + aIm * bIm;
+        fftInput[static_cast<size_t>(2 * k + 1)] = aRe * bIm - aIm * bRe;
+    }
+
+    fft->performRealOnlyInverseTransform(fftInput.data());
+
+    float powerTerm0 = 0.0f;
+    for (size_t j = 0; j < n; ++j)
+        powerTerm0 += linearBuffer[j] * linearBuffer[j];
+
+    float powerTermTau = powerTerm0;
+
+    diff[0] = 0.0f;
+    for (size_t tau = 1; tau < n; ++tau)
+    {
+        powerTermTau += linearBuffer[n + tau - 1] * linearBuffer[n + tau - 1]
+                      - linearBuffer[tau - 1] * linearBuffer[tau - 1];
+        diff[tau] = powerTerm0 + powerTermTau - 2.0f * fftInput[tau];
     }
 
     cmndf[0] = 1.0f;
