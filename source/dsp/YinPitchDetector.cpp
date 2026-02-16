@@ -6,7 +6,7 @@ void YinPitchDetector::prepare(double sampleRate)
 {
     analysisSR = sampleRate;
 
-    halfWindow = static_cast<int>(std::ceil(sampleRate / 70.0));
+    halfWindow = static_cast<int>(std::ceil(sampleRate / 60.0));
     windowSize = 2 * halfWindow;
     hopSize = static_cast<int>(std::ceil(sampleRate * 0.003));
 
@@ -117,6 +117,19 @@ void YinPitchDetector::analyse()
                 ++tau;
             tauEstimate = tau;
             break;
+        }
+    }
+
+    if (tauEstimate == 0)
+    {
+        float minVal = 1.0f;
+        for (size_t tau = 2; tau < n; ++tau)
+        {
+            if (cmndf[tau] < minVal)
+            {
+                minVal = cmndf[tau];
+                tauEstimate = tau;
+            }
         }
     }
 

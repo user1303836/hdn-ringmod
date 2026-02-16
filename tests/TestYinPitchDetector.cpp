@@ -7,7 +7,7 @@ static constexpr double twoPi = 6.283185307179586476925;
 
 static int computeWindowSize(double sampleRate)
 {
-    int halfWindow = static_cast<int>(std::ceil(sampleRate / 70.0));
+    int halfWindow = static_cast<int>(std::ceil(sampleRate / 60.0));
     return 2 * halfWindow;
 }
 
@@ -25,6 +25,23 @@ static void feedSine(YinPitchDetector& yin, double sampleRate, float freq, int n
     {
         float sample = static_cast<float>(std::sin(phase));
         yin.feedSample(sample);
+        phase += inc;
+    }
+}
+
+static void feedHarmonicComplex(YinPitchDetector& yin, double sampleRate, float freq, int numSamples, float amplitude)
+{
+    double phase = 0.0;
+    double inc = twoPi * static_cast<double>(freq) / sampleRate;
+
+    for (int i = 0; i < numSamples; ++i)
+    {
+        double s = std::sin(phase)
+                 + 0.8 * std::sin(2.0 * phase)
+                 + 0.6 * std::sin(3.0 * phase)
+                 + 0.5 * std::sin(4.0 * phase)
+                 + 0.3 * std::sin(5.0 * phase);
+        yin.feedSample(static_cast<float>(s * static_cast<double>(amplitude)));
         phase += inc;
     }
 }
@@ -218,4 +235,43 @@ TEST_CASE("YIN: tracks frequency sweep across hop intervals")
     REQUIRE(resultAfter.frequency > 0.0f);
     REQUIRE_THAT(static_cast<double>(resultAfter.frequency),
                  Catch::Matchers::WithinRel(880.0, 0.05));
+}
+
+TEST_CASE("YIN: fallback detects harmonically complex low signal")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedHarmonicComplex(yin, 44100.0, 82.4f, 44100, 0.15f);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE(result.frequency > 40.0f);
+    REQUIRE(result.frequency < 200.0f);
+}
+
+TEST_CASE("YIN: silence still returns zero with fallback")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    for (int i = 0; i < 44100; ++i)
+        yin.feedSample(0.0f);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency == 0.0f);
+    REQUIRE(result.confidence == 0.0f);
+}
+
+TEST_CASE("YIN: threshold path still preferred for clean signals")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedSine(yin, 44100.0, 440.0f, 44100);
+
+    auto result = yin.getResult();
+    REQUIRE(result.confidence > 0.8f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinRel(440.0, 0.01));
 }
