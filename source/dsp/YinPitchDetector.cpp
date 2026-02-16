@@ -6,9 +6,9 @@ void YinPitchDetector::prepare(double sampleRate)
 {
     analysisSR = sampleRate;
 
-    windowSize = 1024;
-    halfWindow = windowSize / 2;
-    hopSize = 128;
+    halfWindow = static_cast<int>(std::ceil(sampleRate / 70.0));
+    windowSize = 2 * halfWindow;
+    hopSize = static_cast<int>(std::ceil(sampleRate * 0.003));
 
     buffer.assign(static_cast<size_t>(windowSize), 0.0f);
     linearBuffer.resize(static_cast<size_t>(windowSize));
@@ -17,7 +17,7 @@ void YinPitchDetector::prepare(double sampleRate)
 
     writePos = 0;
     hopCounter = 0;
-    sampleCount = 0;
+    windowFilled = false;
     lastResult = {};
 }
 
@@ -25,10 +25,17 @@ void YinPitchDetector::feedSample(float sample)
 {
     buffer[static_cast<size_t>(writePos)] = sample;
     writePos = (writePos + 1) % windowSize;
-    ++sampleCount;
     ++hopCounter;
 
-    if (sampleCount >= windowSize && hopCounter >= hopSize)
+    if (!windowFilled)
+    {
+        if (writePos == 0)
+            windowFilled = true;
+        else
+            return;
+    }
+
+    if (hopCounter >= hopSize)
     {
         hopCounter = 0;
         analyse();

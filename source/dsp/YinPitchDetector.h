@@ -19,15 +19,15 @@ private:
     void analyse();
 
     double analysisSR = 44100.0;
-    int windowSize = 1024;
-    int halfWindow = 512;
-    int hopSize = 128;
+    int windowSize = 0;
+    int halfWindow = 0;
+    int hopSize = 0;
 
     std::vector<float> buffer;
     std::vector<float> linearBuffer;
     int writePos = 0;
     int hopCounter = 0;
-    int sampleCount = 0;
+    bool windowFilled = false;
 
     std::vector<float> diff;
     std::vector<float> cmndf;
