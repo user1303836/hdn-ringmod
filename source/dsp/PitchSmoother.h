@@ -41,14 +41,17 @@ public:
             return std::exp2(smoothed);
         }
 
-        smoothed += alpha * (logFreq - smoothed);
+        float delta = std::abs(logFreq - smoothed);
+        float effectiveAlpha = delta > 0.08f ? 1.0f : alpha;
+
+        smoothed += effectiveAlpha * (logFreq - smoothed);
         return std::exp2(smoothed);
     }
 
 private:
     inline void recomputeAlpha()
     {
-        float tau = smoothingAmount * 0.2f;
+        float tau = smoothingAmount * 0.05f;
         if (tau < 1e-6f)
             alpha = 1.0f;
         else

@@ -4,40 +4,46 @@
 
 void YinPitchDetector::prepare(double sampleRate)
 {
-    decimation = (sampleRate > 50000.0) ? 4 : 2;
-    decimationCounter = 0;
-    decimationAccum = 0.0f;
-    analysisSR = sampleRate / decimation;
+    analysisSR = sampleRate;
 
-    windowSize = 2048;
-    halfWindow = windowSize / 2;
+    halfWindow = static_cast<int>(std::ceil(sampleRate / 70.0));
+    windowSize = 2 * halfWindow;
+    hopSize = static_cast<int>(std::ceil(sampleRate * 0.003));
+
+    fftOrder = static_cast<int>(std::ceil(std::log2(2.0 * windowSize)));
+    fftSize = 1 << fftOrder;
+    fft = std::make_unique<juce::dsp::FFT>(fftOrder);
+    fftInput.resize(static_cast<size_t>(fftSize * 2), 0.0f);
+    fftOutput.resize(static_cast<size_t>(fftSize * 2), 0.0f);
 
     buffer.assign(static_cast<size_t>(windowSize), 0.0f);
+    linearBuffer.resize(static_cast<size_t>(windowSize));
     diff.resize(static_cast<size_t>(halfWindow));
     cmndf.resize(static_cast<size_t>(halfWindow));
 
     writePos = 0;
-    bufferFull = false;
+    hopCounter = 0;
+    windowFilled = false;
     lastResult = {};
 }
 
 void YinPitchDetector::feedSample(float sample)
 {
-    decimationAccum += sample;
-    if (++decimationCounter < decimation)
-        return;
+    buffer[static_cast<size_t>(writePos)] = sample;
+    writePos = (writePos + 1) % windowSize;
+    ++hopCounter;
 
-    float decimatedSample = decimationAccum / static_cast<float>(decimation);
-    decimationAccum = 0.0f;
-    decimationCounter = 0;
-
-    buffer[static_cast<size_t>(writePos)] = decimatedSample;
-    ++writePos;
-
-    if (writePos >= windowSize)
+    if (!windowFilled)
     {
-        writePos = 0;
-        bufferFull = true;
+        if (writePos == 0)
+            windowFilled = true;
+        else
+            return;
+    }
+
+    if (hopCounter >= hopSize)
+    {
+        hopCounter = 0;
         analyse();
     }
 }
@@ -49,24 +55,47 @@ PitchResult YinPitchDetector::getResult() const
 
 void YinPitchDetector::analyse()
 {
-    if (!bufferFull)
-        return;
-
     auto n = static_cast<size_t>(halfWindow);
 
-    // Step 1: Difference function
-    for (size_t tau = 0; tau < n; ++tau)
+    for (int i = 0; i < windowSize; ++i)
+        linearBuffer[static_cast<size_t>(i)] = buffer[static_cast<size_t>((writePos + i) % windowSize)];
+
+    std::fill(fftInput.begin(), fftInput.end(), 0.0f);
+    for (size_t i = 0; i < n; ++i)
+        fftInput[i] = linearBuffer[i];
+    fft->performRealOnlyForwardTransform(fftInput.data());
+
+    std::fill(fftOutput.begin(), fftOutput.end(), 0.0f);
+    for (int i = 0; i < windowSize; ++i)
+        fftOutput[static_cast<size_t>(i)] = linearBuffer[static_cast<size_t>(i)];
+    fft->performRealOnlyForwardTransform(fftOutput.data());
+
+    for (int k = 0; k < fftSize; ++k)
     {
-        float sum = 0.0f;
-        for (size_t j = 0; j < n; ++j)
-        {
-            float d = buffer[j] - buffer[j + tau];
-            sum += d * d;
-        }
-        diff[tau] = sum;
+        float aRe = fftInput[static_cast<size_t>(2 * k)];
+        float aIm = fftInput[static_cast<size_t>(2 * k + 1)];
+        float bRe = fftOutput[static_cast<size_t>(2 * k)];
+        float bIm = fftOutput[static_cast<size_t>(2 * k + 1)];
+        fftInput[static_cast<size_t>(2 * k)]     = aRe * bRe + aIm * bIm;
+        fftInput[static_cast<size_t>(2 * k + 1)] = aRe * bIm - aIm * bRe;
     }
 
-    // Step 2: Cumulative mean normalized difference function
+    fft->performRealOnlyInverseTransform(fftInput.data());
+
+    float powerTerm0 = 0.0f;
+    for (size_t j = 0; j < n; ++j)
+        powerTerm0 += linearBuffer[j] * linearBuffer[j];
+
+    float powerTermTau = powerTerm0;
+
+    diff[0] = 0.0f;
+    for (size_t tau = 1; tau < n; ++tau)
+    {
+        powerTermTau += linearBuffer[n + tau - 1] * linearBuffer[n + tau - 1]
+                      - linearBuffer[tau - 1] * linearBuffer[tau - 1];
+        diff[tau] = powerTerm0 + powerTermTau - 2.0f * fftInput[tau];
+    }
+
     cmndf[0] = 1.0f;
     float runningSum = 0.0f;
 
@@ -79,7 +108,6 @@ void YinPitchDetector::analyse()
             cmndf[tau] = 1.0f;
     }
 
-    // Step 3: Absolute threshold
     size_t tauEstimate = 0;
     for (size_t tau = 2; tau < n; ++tau)
     {
@@ -98,7 +126,6 @@ void YinPitchDetector::analyse()
         return;
     }
 
-    // Step 4: Parabolic interpolation
     float betterTau = static_cast<float>(tauEstimate);
 
     if (tauEstimate > 0 && tauEstimate < n - 1)

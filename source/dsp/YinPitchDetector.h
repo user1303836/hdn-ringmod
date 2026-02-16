@@ -1,5 +1,7 @@
 #pragma once
 
+#include <juce_dsp/juce_dsp.h>
+#include <memory>
 #include <vector>
 
 struct PitchResult
@@ -19,16 +21,21 @@ private:
     void analyse();
 
     double analysisSR = 44100.0;
-    int windowSize = 2048;
-    int halfWindow = 1024;
-
-    int decimation = 1;
-    int decimationCounter = 0;
-    float decimationAccum = 0.0f;
+    int windowSize = 0;
+    int halfWindow = 0;
+    int hopSize = 0;
 
     std::vector<float> buffer;
+    std::vector<float> linearBuffer;
     int writePos = 0;
-    bool bufferFull = false;
+    int hopCounter = 0;
+    bool windowFilled = false;
+
+    std::unique_ptr<juce::dsp::FFT> fft;
+    int fftOrder = 0;
+    int fftSize = 0;
+    std::vector<float> fftInput;
+    std::vector<float> fftOutput;
 
     std::vector<float> diff;
     std::vector<float> cmndf;

@@ -8,15 +8,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(HdnRingmodTests
+juce_add_console_app(HdnRingmodTests
+    PRODUCT_NAME "HDN Ring Modulator Tests"
+)
+
+target_sources(HdnRingmodTests PRIVATE
     TestOscillator.cpp
     TestYinPitchDetector.cpp
     TestPitchSmoother.cpp
     TestParameters.cpp
-)
-
-# PitchSmoother is header-only so doesn't need a source entry here
-target_sources(HdnRingmodTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../source/dsp/Oscillator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../source/dsp/YinPitchDetector.cpp
 )
@@ -25,7 +25,15 @@ target_include_directories(HdnRingmodTests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../source
 )
 
-target_link_libraries(HdnRingmodTests PRIVATE Catch2::Catch2WithMain)
+target_compile_definitions(HdnRingmodTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+)
+
+target_link_libraries(HdnRingmodTests PRIVATE
+    juce::juce_dsp
+    Catch2::Catch2WithMain
+)
 
 include(CTest)
 include(Catch)
