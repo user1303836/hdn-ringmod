@@ -81,7 +81,7 @@ TEST_CASE("PitchSmoother: zero smoothing passes frequency through immediately")
                  Catch::Matchers::WithinAbs(440.0, 0.1));
 }
 
-TEST_CASE("PitchSmoother: smoothing slows convergence")
+TEST_CASE("PitchSmoother: smoothing slows convergence within a semitone")
 {
     PitchSmoother fast, slow;
     fast.prepare(44100.0);
@@ -92,32 +92,82 @@ TEST_CASE("PitchSmoother: smoothing slows convergence")
     slow.setSmoothingAmount(0.9f);
     slow.setSensitivity(1.0f);
 
-    fast.process(220.0f, 1.0f);
-    slow.process(220.0f, 1.0f);
+    fast.process(440.0f, 1.0f);
+    slow.process(440.0f, 1.0f);
 
     float fastOut = 0.0f, slowOut = 0.0f;
-    for (int i = 0; i < 1000; ++i)
+    for (int i = 0; i < 100; ++i)
     {
-        fastOut = fast.process(440.0f, 1.0f);
-        slowOut = slow.process(440.0f, 1.0f);
+        fastOut = fast.process(443.0f, 1.0f);
+        slowOut = slow.process(443.0f, 1.0f);
     }
 
-    REQUIRE(std::abs(fastOut - 440.0f) < std::abs(slowOut - 440.0f));
+    REQUIRE(std::abs(fastOut - 443.0f) < std::abs(slowOut - 443.0f));
 }
 
-TEST_CASE("PitchSmoother: works in log-frequency domain (octave-uniform)")
+TEST_CASE("PitchSmoother: smoothing operates in log-frequency domain")
 {
     PitchSmoother smoother;
     smoother.prepare(44100.0);
     smoother.setSmoothingAmount(0.5f);
     smoother.setSensitivity(1.0f);
 
-    smoother.process(220.0f, 1.0f);
+    smoother.process(440.0f, 1.0f);
 
     float output = 0.0f;
-    for (int i = 0; i < 4410; ++i)
-        output = smoother.process(440.0f, 1.0f);
+    for (int i = 0; i < 100; ++i)
+        output = smoother.process(445.0f, 1.0f);
 
-    REQUIRE(output > 220.0f);
-    REQUIRE(output < 440.0f);
+    REQUIRE(output > 440.0f);
+    REQUIRE(output < 445.0f);
+}
+
+TEST_CASE("PitchSmoother: instant lock on note change")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(1.0f);
+    smoother.setSensitivity(1.0f);
+
+    smoother.process(440.0f, 1.0f);
+
+    float output = smoother.process(880.0f, 1.0f);
+    REQUIRE_THAT(static_cast<double>(output),
+                 Catch::Matchers::WithinAbs(880.0, 0.1));
+}
+
+TEST_CASE("PitchSmoother: holds during alternating confidence gaps")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(0.0f);
+    smoother.setSensitivity(0.5f);
+
+    smoother.process(440.0f, 1.0f);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        float held = smoother.process(0.0f, 0.0f);
+        REQUIRE_THAT(static_cast<double>(held),
+                     Catch::Matchers::WithinAbs(440.0, 0.1));
+
+        float active = smoother.process(440.0f, 1.0f);
+        REQUIRE_THAT(static_cast<double>(active),
+                     Catch::Matchers::WithinAbs(440.0, 0.1));
+    }
+}
+
+TEST_CASE("PitchSmoother: stable output on sustained note")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(0.5f);
+    smoother.setSensitivity(1.0f);
+
+    for (int i = 0; i < 1000; ++i)
+        smoother.process(440.0f, 1.0f);
+
+    float output = smoother.process(440.0f, 1.0f);
+    REQUIRE_THAT(static_cast<double>(output),
+                 Catch::Matchers::WithinAbs(440.0, 0.01));
 }
