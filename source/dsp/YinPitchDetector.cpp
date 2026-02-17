@@ -1,14 +1,99 @@
 #include "YinPitchDetector.h"
 #include <algorithm>
 #include <cmath>
+#include <thread>
+#include <chrono>
+
+class YinPitchDetector::AnalysisThread : public juce::Thread
+{
+public:
+    AnalysisThread(YinPitchDetector& owner)
+        : Thread("PitchAnalysis"), o(owner) {}
+
+    void run() override
+    {
+        while (!threadShouldExit())
+        {
+            int ready = o.fifo.getNumReady();
+            if (ready == 0)
+            {
+                wait(1);
+                continue;
+            }
+
+            int start1, size1, start2, size2;
+            o.fifo.prepareToRead(ready, start1, size1, start2, size2);
+
+            for (int i = 0; i < size1; ++i)
+                processSample(o.fifoBuffer[static_cast<size_t>(start1 + i)]);
+            for (int i = 0; i < size2; ++i)
+                processSample(o.fifoBuffer[static_cast<size_t>(start2 + i)]);
+
+            o.fifo.finishedRead(size1 + size2);
+        }
+    }
+
+private:
+    void processSample(float sample)
+    {
+        if (!o.decimator.processSample(sample))
+            return;
+        float decimated = o.decimator.getOutput();
+
+        o.buffer[static_cast<size_t>(o.writePos)] = decimated;
+        if (++o.writePos >= o.windowSize) o.writePos = 0;
+        ++o.hopCounter;
+
+        if (!o.windowFilled)
+        {
+            if (o.writePos == 0)
+                o.windowFilled = true;
+            else
+                return;
+        }
+
+        if (o.hopCounter >= o.hopSize)
+        {
+            o.hopCounter = 0;
+            o.analyse();
+            o.atomicFreq.store(o.lastResult.frequency, std::memory_order_relaxed);
+            o.atomicConf.store(o.lastResult.confidence, std::memory_order_relaxed);
+        }
+    }
+
+    YinPitchDetector& o;
+};
+
+YinPitchDetector::YinPitchDetector() = default;
+
+YinPitchDetector::~YinPitchDetector()
+{
+    if (analysisThread)
+    {
+        analysisThread->signalThreadShouldExit();
+        analysisThread->notify();
+        analysisThread->waitForThreadToExit(1000);
+    }
+}
 
 void YinPitchDetector::prepare(double sampleRate)
 {
-    analysisSR = sampleRate;
+    if (analysisThread)
+    {
+        analysisThread->signalThreadShouldExit();
+        analysisThread->notify();
+        analysisThread->waitForThreadToExit(1000);
+        analysisThread.reset();
+    }
 
-    halfWindow = static_cast<int>(std::ceil(sampleRate / 60.0));
+    double decimatedSR = sampleRate / 2.0;
+    decimator.reset();
+
+    analysisSR = decimatedSR;
+
+    halfWindow = static_cast<int>(std::ceil(decimatedSR / 60.0));
     windowSize = 2 * halfWindow;
-    hopSize = static_cast<int>(std::ceil(sampleRate * 0.003));
+    hopSize = static_cast<int>(std::ceil(decimatedSR * 0.012));
 
     fftOrder = static_cast<int>(std::ceil(std::log2(2.0 * windowSize)));
     fftSize = 1 << fftOrder;
@@ -21,51 +106,44 @@ void YinPitchDetector::prepare(double sampleRate)
     diff.resize(static_cast<size_t>(halfWindow));
     cmndf.resize(static_cast<size_t>(halfWindow));
 
+    int fifoSize = std::max(8192, static_cast<int>(sampleRate * 2.5));
+    fifo.setTotalSize(fifoSize);
+    fifoBuffer.resize(static_cast<size_t>(fifoSize));
+
     writePos = 0;
     hopCounter = 0;
     windowFilled = false;
     lastResult = {};
+    atomicFreq.store(0.0f, std::memory_order_relaxed);
+    atomicConf.store(0.0f, std::memory_order_relaxed);
+
+    analysisThread = std::make_unique<AnalysisThread>(*this);
+    analysisThread->startThread(juce::Thread::Priority::normal);
 }
 
-void YinPitchDetector::feedSample(float sample)
+void YinPitchDetector::flushForTest()
 {
-    buffer[static_cast<size_t>(writePos)] = sample;
-    writePos = (writePos + 1) % windowSize;
-    ++hopCounter;
-
-    if (!windowFilled)
-    {
-        if (writePos == 0)
-            windowFilled = true;
-        else
-            return;
-    }
-
-    if (hopCounter >= hopSize)
-    {
-        hopCounter = 0;
-        analyse();
-    }
-}
-
-PitchResult YinPitchDetector::getResult() const
-{
-    return lastResult;
+    if (analysisThread)
+        analysisThread->notify();
+    while (fifo.getNumReady() > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
 void YinPitchDetector::analyse()
 {
     auto n = static_cast<size_t>(halfWindow);
 
-    for (int i = 0; i < windowSize; ++i)
-        linearBuffer[static_cast<size_t>(i)] = buffer[static_cast<size_t>((writePos + i) % windowSize)];
+    int tail = windowSize - writePos;
+    std::copy_n(buffer.data() + writePos, tail, linearBuffer.data());
+    std::copy_n(buffer.data(), writePos, linearBuffer.data() + tail);
 
-    std::fill(fftInput.begin(), fftInput.end(), 0.0f);
+    juce::FloatVectorOperations::clear(fftInput.data(), fftSize * 2);
     for (size_t i = 0; i < n; ++i)
         fftInput[i] = linearBuffer[i];
     fft->performRealOnlyForwardTransform(fftInput.data());
 
-    std::fill(fftOutput.begin(), fftOutput.end(), 0.0f);
+    juce::FloatVectorOperations::clear(fftOutput.data(), fftSize * 2);
     for (int i = 0; i < windowSize; ++i)
         fftOutput[static_cast<size_t>(i)] = linearBuffer[static_cast<size_t>(i)];
     fft->performRealOnlyForwardTransform(fftOutput.data());

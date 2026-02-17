@@ -11,6 +11,7 @@ public:
         sr = std::max(1.0f, static_cast<float>(sampleRate));
         hasValue = false;
         smoothed = 0.0f;
+        cachedFreq = 0.0f;
         recomputeAlpha();
     }
 
@@ -30,7 +31,7 @@ public:
     inline float process(float detectedFreq, float confidence)
     {
         if (detectedFreq <= 0.0f || confidence < sensitivityThreshold)
-            return hasValue ? std::exp2(smoothed) : 0.0f;
+            return cachedFreq;
 
         float logFreq = std::log2(detectedFreq);
 
@@ -38,14 +39,20 @@ public:
         {
             smoothed = logFreq;
             hasValue = true;
-            return std::exp2(smoothed);
+            cachedFreq = std::exp2(smoothed);
+            return cachedFreq;
         }
 
         float delta = std::abs(logFreq - smoothed);
         float effectiveAlpha = delta > 0.08f ? 1.0f : alpha;
 
+        float prev = smoothed;
         smoothed += effectiveAlpha * (logFreq - smoothed);
-        return std::exp2(smoothed);
+
+        if (smoothed != prev)
+            cachedFreq = std::exp2(smoothed);
+
+        return cachedFreq;
     }
 
 private:
@@ -63,5 +70,6 @@ private:
     float smoothed = 0.0f;
     float alpha = 0.5f;
     float sensitivityThreshold = 0.5f;
+    float cachedFreq = 0.0f;
     bool hasValue = false;
 };
