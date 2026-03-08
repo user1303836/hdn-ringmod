@@ -12,8 +12,6 @@ This is just a ring modulator, with pitch tracking because there are none that a
 
 This plugin adds **pitch tracking**. It listens to your input, detects the fundamental frequency in real time using the YIN pitch detection algorithm, and locks the modulator oscillator to that pitch. The result is a ring mod effect that tracks what you're playing, producing consistent harmonic relationships regardless of the note. The Rate Multiplier parameter lets you set the ratio between the detected pitch and the oscillator -- 1x gives you octave doubling, 2x gives you a fifth above that, and fractional values produce subharmonic content.
 
-When pitch detection confidence is low (silence, noise, polyphonic content), the effect gracefully fades to dry signal rather than producing artifacts.
-
 The plugin also has a conventional **Manual** mode where the oscillator runs at a fixed frequency, for traditional ring mod sounds.
 
 Four oscillator waveforms are available (sine, triangle, square, saw), each producing a different harmonic character. Square and saw use PolyBLEP anti-aliasing to reduce digital artifacts.
@@ -99,12 +97,12 @@ ctest --test-dir build --build-config Release --output-on-failure
 | Manual Rate     | 20 - 5000 Hz                   | 440 Hz      | Fixed oscillator frequency (Manual mode) |
 | Mode            | Pitch Track / Manual           | Pitch Track | Pitch source selection                   |
 | Smoothing       | 0 - 100%                       | 50%         | Pitch tracking smoothing amount          |
-| Sensitivity     | 0 - 100%                       | 50%         | Pitch detection confidence threshold     |
+| Sensitivity     | 0 - 100%                       | 50%         | Minimum confidence for accepting pitch updates |
 | Waveform        | Sine / Triangle / Square / Saw | Sine        | Ring modulator oscillator shape          |
 
 ## How It Works
 
-In **Pitch Track** mode, the plugin detects the pitch of the incoming audio using the YIN algorithm, then ring-modulates the signal with an oscillator locked to that pitch (multiplied by the Rate Multiplier). The wet signal is confidence-gated so the effect fades in as pitch detection becomes more certain.
+In **Pitch Track** mode, the plugin detects the pitch of the incoming audio using the YIN algorithm, then ring-modulates the signal with an oscillator locked to that pitch (multiplied by the Rate Multiplier). The effect stays dry only until the tracker has a valid pitch, then follows the tracked carrier directly.
 
 In **Manual** mode, the oscillator runs at a fixed frequency set by the Manual Rate knob.
 

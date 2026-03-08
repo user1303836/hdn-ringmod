@@ -54,8 +54,8 @@ private:
     juce::SmoothedValue<float> smoothedRateMult;
     juce::SmoothedValue<float> smoothedManualRate;
 
-    float smoothedWetGain = 1.0f;
-    float confSmoothAlpha = 0.01f;
+    float smoothedTrackEnable = 1.0f;
+    float trackEnableAlpha = 0.01f;
 
     std::atomic<float>* mixParam = nullptr;
     std::atomic<float>* rateMultParam = nullptr;

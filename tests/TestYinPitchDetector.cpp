@@ -104,6 +104,20 @@ TEST_CASE("YIN: detects 220 Hz sine at 44100 Hz")
     REQUIRE(result.confidence > 0.5f);
 }
 
+TEST_CASE("YIN: parabolic interpolation is accurate for 110 Hz sine")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedSine(yin, 44100.0, 110.0f, 44100);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinAbs(110.0, 0.2));
+    REQUIRE(result.confidence > 0.5f);
+}
+
 TEST_CASE("YIN: detects E2 (82.4 Hz) at 44100 Hz")
 {
     YinPitchDetector yin;
