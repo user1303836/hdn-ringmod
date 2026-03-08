@@ -226,7 +226,7 @@ void YinPitchDetector::analyse()
         float s2 = cmndf[tauEstimate + 1];
         float denom = 2.0f * (2.0f * s1 - s2 - s0);
         if (std::abs(denom) > 1e-12f)
-            betterTau += (s0 - s2) / denom;
+            betterTau += (s2 - s0) / denom;
     }
 
     if (betterTau < 1.0f)

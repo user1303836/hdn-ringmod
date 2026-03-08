@@ -86,8 +86,8 @@ void HdnRingmodAudioProcessor::prepareToPlay(double sampleRate, int)
     smoothedManualRate.setCurrentAndTargetValue(manualRateParam->load());
 
     float tau = 0.005f;
-    confSmoothAlpha = 1.0f - std::exp(-1.0f / (static_cast<float>(sampleRate) * tau));
-    smoothedWetGain = 0.0f;
+    trackEnableAlpha = 1.0f - std::exp(-1.0f / (static_cast<float>(sampleRate) * tau));
+    smoothedTrackEnable = 0.0f;
 }
 
 void HdnRingmodAudioProcessor::releaseResources()
@@ -140,7 +140,7 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
     for (int i = 0; i < numSamples; ++i)
     {
         float mix = smoothedMix.getNextValue();
-        float wetGain = 1.0f;
+        float effectiveMix = mix;
 
         if (mode == 0)
         {
@@ -151,22 +151,28 @@ void HdnRingmodAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, ju
             pitchDetector.feedSample(monoSample);
 
             auto result = pitchDetector.getResult();
-            wetGain = result.confidence;
-            smoothedWetGain += confSmoothAlpha * (wetGain - smoothedWetGain);
             float smoothedFreq = pitchSmoother.process(result.frequency, result.confidence);
+
+            // Stay dry until the tracker has a pitch, then ramp straight into the tracked carrier.
+            if (smoothedFreq > 0.0f)
+                smoothedTrackEnable += trackEnableAlpha * (1.0f - smoothedTrackEnable);
+            else
+                smoothedTrackEnable = 0.0f;
+
             float oscFreq = smoothedFreq * smoothedRateMult.getNextValue();
 
             if (oscFreq > 0.0f)
                 oscillator.setFrequency(oscFreq);
+
+            effectiveMix *= smoothedTrackEnable;
         }
         else
         {
-            smoothedWetGain = 1.0f;
+            smoothedTrackEnable = 1.0f;
             oscillator.setFrequency(smoothedManualRate.getNextValue());
         }
 
         float oscSample = oscillator.nextSample();
-        float effectiveMix = mix * smoothedWetGain;
 
         for (int ch = 0; ch < numChannels; ++ch)
         {
