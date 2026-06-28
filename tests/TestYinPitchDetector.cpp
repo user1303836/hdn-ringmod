@@ -5,18 +5,20 @@
 
 static constexpr double twoPi = 6.283185307179586476925;
 static constexpr int decimationFactor = 2;
+static constexpr double minimumTrackedFrequency = 80.0;
+static constexpr double hopSeconds = 0.003;
 
 static int computeWindowSize(double sampleRate)
 {
     double decimatedSR = sampleRate / decimationFactor;
-    int halfWindow = static_cast<int>(std::ceil(decimatedSR / 60.0));
+    int halfWindow = static_cast<int>(std::ceil(decimatedSR / minimumTrackedFrequency));
     return 2 * halfWindow;
 }
 
 static int computeHopSize(double sampleRate)
 {
     double decimatedSR = sampleRate / decimationFactor;
-    return static_cast<int>(std::ceil(decimatedSR * 0.012));
+    return static_cast<int>(std::ceil(decimatedSR * hopSeconds));
 }
 
 static void feedSine(YinPitchDetector& yin, double sampleRate, float freq, int numSamples)
@@ -218,6 +220,51 @@ TEST_CASE("YIN: first detection within one window fill")
 
     REQUIRE(samplesNeeded <= winOriginal + hopOriginal);
     REQUIRE(yin.getResult().frequency > 0.0f);
+}
+
+TEST_CASE("YIN: first 440 Hz detection is under 20 ms")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedSine(yin, 44100.0, 440.0f, 882);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinRel(440.0, 0.03));
+}
+
+TEST_CASE("YIN: locks to 440 Hz within 20 ms after silence")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    for (int i = 0; i < 44100; ++i)
+        yin.feedSample(0.0f);
+    yin.flushForTest();
+
+    REQUIRE(yin.getResult().frequency == 0.0f);
+
+    feedSine(yin, 44100.0, 440.0f, 882);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinRel(440.0, 0.03));
+}
+
+TEST_CASE("YIN: detects E2 within 30 ms")
+{
+    YinPitchDetector yin;
+    yin.prepare(44100.0);
+
+    feedSine(yin, 44100.0, 82.4f, 1323);
+
+    auto result = yin.getResult();
+    REQUIRE(result.frequency > 0.0f);
+    REQUIRE_THAT(static_cast<double>(result.frequency),
+                 Catch::Matchers::WithinRel(82.4, 0.03));
 }
 
 TEST_CASE("YIN: detects pitch change after silence")
