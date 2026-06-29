@@ -42,20 +42,28 @@ private:
 
         o.buffer[static_cast<size_t>(o.writePos)] = decimated;
         if (++o.writePos >= o.windowSize) o.writePos = 0;
+
+        o.activityEnvelope = std::max(std::abs(decimated), o.activityEnvelope * o.activityRelease);
+        if (o.activityEnvelope < o.silenceThreshold)
+        {
+            o.activeWindowSize = 0;
+            o.hopCounter = 0;
+            o.lastResult = {};
+            o.atomicFreq.store(0.0f, std::memory_order_relaxed);
+            o.atomicConf.store(0.0f, std::memory_order_relaxed);
+            return;
+        }
+
+        o.activeWindowSize = std::min(o.activeWindowSize + 1, o.windowSize);
         ++o.hopCounter;
 
-        if (!o.windowFilled)
-        {
-            if (o.writePos == 0)
-                o.windowFilled = true;
-            else
-                return;
-        }
+        if (o.activeWindowSize < o.minAnalysisWindow)
+            return;
 
         if (o.hopCounter >= o.hopSize)
         {
             o.hopCounter = 0;
-            o.analyse();
+            o.analyse(o.activeWindowSize);
             o.atomicFreq.store(o.lastResult.frequency, std::memory_order_relaxed);
             o.atomicConf.store(o.lastResult.confidence, std::memory_order_relaxed);
         }
@@ -91,9 +99,11 @@ void YinPitchDetector::prepare(double sampleRate)
 
     analysisSR = decimatedSR;
 
-    halfWindow = static_cast<int>(std::ceil(decimatedSR / 60.0));
+    halfWindow = static_cast<int>(std::ceil(decimatedSR / 80.0));
     windowSize = 2 * halfWindow;
-    hopSize = static_cast<int>(std::ceil(decimatedSR * 0.012));
+    hopSize = static_cast<int>(std::ceil(decimatedSR * 0.003));
+    minAnalysisWindow = 2 * static_cast<int>(std::ceil(decimatedSR / 200.0));
+    minAnalysisWindow = std::min(minAnalysisWindow, windowSize);
 
     fftOrder = static_cast<int>(std::ceil(std::log2(2.0 * windowSize)));
     fftSize = 1 << fftOrder;
@@ -112,7 +122,8 @@ void YinPitchDetector::prepare(double sampleRate)
 
     writePos = 0;
     hopCounter = 0;
-    windowFilled = false;
+    activeWindowSize = 0;
+    activityEnvelope = 0.0f;
     lastResult = {};
     atomicFreq.store(0.0f, std::memory_order_relaxed);
     atomicConf.store(0.0f, std::memory_order_relaxed);
@@ -130,13 +141,19 @@ void YinPitchDetector::flushForTest()
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 }
 
-void YinPitchDetector::analyse()
+void YinPitchDetector::analyse(int samplesToAnalyse)
 {
-    auto n = static_cast<size_t>(halfWindow);
+    int activeHalfWindow = std::clamp(samplesToAnalyse / 2, 2, halfWindow);
+    int activeWindow = 2 * activeHalfWindow;
+    auto n = static_cast<size_t>(activeHalfWindow);
 
-    int tail = windowSize - writePos;
-    std::copy_n(buffer.data() + writePos, tail, linearBuffer.data());
-    std::copy_n(buffer.data(), writePos, linearBuffer.data() + tail);
+    int start = writePos - activeWindow;
+    if (start < 0)
+        start += windowSize;
+
+    int tail = std::min(activeWindow, windowSize - start);
+    std::copy_n(buffer.data() + start, tail, linearBuffer.data());
+    std::copy_n(buffer.data(), activeWindow - tail, linearBuffer.data() + tail);
 
     juce::FloatVectorOperations::clear(fftInput.data(), fftSize * 2);
     for (size_t i = 0; i < n; ++i)
@@ -144,7 +161,7 @@ void YinPitchDetector::analyse()
     fft->performRealOnlyForwardTransform(fftInput.data());
 
     juce::FloatVectorOperations::clear(fftOutput.data(), fftSize * 2);
-    for (int i = 0; i < windowSize; ++i)
+    for (int i = 0; i < activeWindow; ++i)
         fftOutput[static_cast<size_t>(i)] = linearBuffer[static_cast<size_t>(i)];
     fft->performRealOnlyForwardTransform(fftOutput.data());
 

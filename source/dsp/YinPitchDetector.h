@@ -38,7 +38,7 @@ public:
     void flushForTest();
 
 private:
-    void analyse();
+    void analyse(int samplesToAnalyse);
 
     class AnalysisThread;
     friend class AnalysisThread;
@@ -52,7 +52,9 @@ private:
     std::vector<float> linearBuffer;
     int writePos = 0;
     int hopCounter = 0;
-    bool windowFilled = false;
+    int activeWindowSize = 0;
+    int minAnalysisWindow = 0;
+    float activityEnvelope = 0.0f;
 
     std::unique_ptr<juce::dsp::FFT> fft;
     int fftOrder = 0;
@@ -66,6 +68,8 @@ private:
     PitchResult lastResult;
 
     static constexpr float threshold = 0.15f;
+    static constexpr float silenceThreshold = 1e-5f;
+    static constexpr float activityRelease = 0.995f;
 
     juce::AbstractFifo fifo { 0 };
     std::vector<float> fifoBuffer;

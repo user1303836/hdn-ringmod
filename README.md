@@ -97,7 +97,7 @@ ctest --test-dir build --build-config Release --output-on-failure
 | Manual Rate     | 20 - 5000 Hz                   | 440 Hz      | Fixed oscillator frequency (Manual mode) |
 | Mode            | Pitch Track / Manual           | Pitch Track | Pitch source selection                   |
 | Smoothing       | 0 - 100%                       | 50%         | Pitch tracking smoothing amount          |
-| Sensitivity     | 0 - 100%                       | 50%         | Minimum confidence for accepting pitch updates |
+| Sensitivity     | 0 - 100%                       | 50%         | Minimum confidence for accepting pitch updates; higher values require stronger detections |
 | Waveform        | Sine / Triangle / Square / Saw | Sine        | Ring modulator oscillator shape          |
 
 ## How It Works

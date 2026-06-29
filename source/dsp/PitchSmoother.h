@@ -25,7 +25,7 @@ public:
 
     inline void setSensitivity(float sensitivity01)
     {
-        sensitivityThreshold = 1.0f - sensitivity01;
+        sensitivityThreshold = std::clamp(sensitivity01, 0.0f, 1.0f);
     }
 
     inline float process(float detectedFreq, float confidence)

@@ -69,6 +69,43 @@ TEST_CASE("PitchSmoother: sensitivity threshold gates low-confidence input")
     REQUIRE(result == 0.0f);
 }
 
+TEST_CASE("PitchSmoother: maximum sensitivity rejects low-confidence input")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(0.0f);
+    smoother.setSensitivity(1.0f);
+
+    float result = smoother.process(440.0f, 0.1f);
+    REQUIRE(result == 0.0f);
+}
+
+TEST_CASE("PitchSmoother: zero sensitivity accepts low-confidence input")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(0.0f);
+    smoother.setSensitivity(0.0f);
+
+    float result = smoother.process(440.0f, 0.1f);
+    REQUIRE_THAT(static_cast<double>(result),
+                 Catch::Matchers::WithinAbs(440.0, 0.1));
+}
+
+TEST_CASE("PitchSmoother: midpoint sensitivity accepts only midpoint confidence or higher")
+{
+    PitchSmoother smoother;
+    smoother.prepare(44100.0);
+    smoother.setSmoothingAmount(0.0f);
+    smoother.setSensitivity(0.5f);
+
+    REQUIRE(smoother.process(440.0f, 0.49f) == 0.0f);
+
+    float result = smoother.process(440.0f, 0.5f);
+    REQUIRE_THAT(static_cast<double>(result),
+                 Catch::Matchers::WithinAbs(440.0, 0.1));
+}
+
 TEST_CASE("PitchSmoother: zero smoothing passes frequency through immediately")
 {
     PitchSmoother smoother;
